@@ -107,7 +107,7 @@ class Model(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         #W = 112 F = 3 S = 2 P = 1 -> X = (112-3+2*1)/2+1 = 56
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self.make_layer(block,56)
+        self.layer1 = self.make_layer(block,64)
         self.layer2 = self.make_layer(block,128)
         self.layer3 = self.make_layer(block,256)
         self.layer4 = self.make_layer(block,512)
@@ -115,8 +115,8 @@ class Model(nn.Module):
         self.fc = nn.Linear(512,2)
     def make_layer(self,block,planes):
         layer = []
-        self.planes = planes
         layer.append(block(self.planes,planes))
+        self.planes = planes
         return nn.Sequential(*layer)
 
     def forward(self, x):

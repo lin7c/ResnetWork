@@ -2,25 +2,16 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision.models import resnet18
+from torchvision.models import resnet18,ResNet18_Weights
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from PIL import Image
 import urllib.request
-import psutil
 import os
-import signal
-
-memory_threshold = 2000
-
-def check_memory_and_stop():
-    process = psutil.Process(os.getpid())
-    memory_info = process.memory_info()
-    rss_memory = memory_info.rss / 1024 / 1024  # 转换为MB
-    if rss_memory > memory_threshold:
-        print(f"Memory usage exceeded the threshold: {rss_memory} MB")
-        os.kill(os.getpid(), signal.SIGTERM)
+import random
+#random.seed(0)
+#torch.manual_seed(0)
 def get_data(txt):
     urls = []
     aim_stack = list("123456789")
@@ -51,7 +42,8 @@ def run_get():
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Resize(256),
-    transforms.CenterCrop(224),
+    transforms.RandomCrop(224),
+    transforms.RandomHorizontalFlip(),
     transforms.Normalize(mean = [0.485, 0.456, 0.406],std = [0.229, 0.224, 0.225])
 ])
 
@@ -138,7 +130,8 @@ def main():
     def train_Resnet():
         dataset = LoadImg(img_dir=['picture/cats','picture/dogs'],transform=transform)
         dataloader = DataLoader(dataset,batch_size=10,shuffle=True,num_workers=4)
-        Resnet18 = resnet18()
+        weights = ResNet18_Weights.DEFAULT
+        Resnet18 = resnet18(weights=weights)
         Resnet18.fc = nn.Linear(Resnet18.fc.in_features,2)
         loss_func = nn.CrossEntropyLoss()
         optimizer = optim.SGD(Resnet18.parameters(),lr=0.01,momentum=0.9)
@@ -146,8 +139,6 @@ def main():
         for epoch in range(num_epochs):
             Resnet18.train()
             for i,(img,label) in enumerate(dataloader):
-                #防止
-                check_memory_and_stop()
                 #forward
                 out = Resnet18(img)
                 loss = loss_func(out,label)
@@ -162,6 +153,7 @@ def main():
         dataset = LoadImg(img_dir=['picture/cats', 'picture/dogs'], transform=transform)
         dataloader = DataLoader(dataset, batch_size=10, shuffle=True, num_workers=4)
         model = Model(Block)
+        model.load_state_dict(torch.load("model.pth"))
         #model = Block(3,8)
         loss_func = nn.CrossEntropyLoss()
         optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
@@ -177,24 +169,25 @@ def main():
                 optimizer.step()
                 if (i + 1) % 10 == 0:
                     print("Epoch", epoch + 1, "/", num_epochs, "Step", i + 1, "/", len(dataloader), "Loss:", loss.item())
-        torch.save(model.state_dict(), "model.pth")
+        torch.save(model.state_dict(), "model2.pth")
     def test():
-        test_model = resnet18()
-        test_model.fc = nn.Linear(test_model.fc.in_features, 2)
-        test_model.load_state_dict(torch.load("resnet18.pth"))
+        test_model = Model(block=Block)
+        #test_model = resnet18()
+        #test_model.fc = nn.Linear(test_model.fc.in_features, 2)
+        test_model.load_state_dict(torch.load("model2.pth"))
         test_model.eval()
-        test_img_paths = ['picture/cats/cat0.jpg','picture/cats/cat23.jpg','picture/dogs/dog23.jpg']
+        test_img_paths = [os.path.join("test",i) for i in os.listdir("test")]
         def test_(test_img_path):
             test_img = Image.open(test_img_path)
             test_img = transform(test_img).unsqueeze(0)
             with torch.no_grad():
                 out = test_model(test_img)
                 _,predicted_class = torch.max(out,1)
-                if predicted_class == 1:
+                if predicted_class.item() == 1:
                     print('Predicted class: cats')
                 else:print('Predicted class: dogs')
         for p in test_img_paths:
             test_(p)
-    train_model()
+    test()
 if __name__ == '__main__':
     main()
